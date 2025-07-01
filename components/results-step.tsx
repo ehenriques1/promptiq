@@ -55,7 +55,20 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
         
         // Handle InvalidPrompt error
         if (data.error === "InvalidPrompt") {
-          toast.error(data.message || "Please submit a longer, instruction-style prompt.")
+          // Show a more prominent toast for InvalidPrompt
+          toast.error(data.message || "Please submit a longer, instruction-style prompt.", {
+            duration: 5000,
+            style: {
+              background: '#ef4444',
+              color: 'white',
+              fontSize: '16px',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              maxWidth: '400px',
+              margin: '0 auto'
+            }
+          })
           setError(data.message || "Please submit a longer, instruction-style prompt.")
           setLoading(false)
           return
@@ -126,6 +139,27 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
   }
 
   if (error) {
+    // For InvalidPrompt errors, show a simpler message since we already show a toast
+    if (error.includes("instruction-style prompt") || error.includes("InvalidPrompt")) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col">
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center max-w-md mx-auto p-6">
+              <div className="text-amber-500 mb-4">
+                <AlertTriangle className="w-16 h-16 mx-auto" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">Prompt Too Short</h2>
+              <p className="text-gray-600 mb-6">Please submit a longer, instruction-style prompt for evaluation.</p>
+              <Button onClick={onBackToLanding} className="bg-[#ebfc72] text-black hover:bg-[#e5f666]">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Try Again
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
     return (
       <div className="min-h-screen bg-white flex flex-col">
         <div className="flex-1 flex items-center justify-center">

@@ -13,14 +13,19 @@ export default function ResultsPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
+  const [userPrompt, setUserPrompt] = useState("");
   const searchParams = useSearchParams();
 
-  // Handle payment success
+  // Handle payment success and get user prompt
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
     if (sessionId) {
       toast.success('Payment successful! Your prompt evaluation is ready.');
     }
+    
+    // Get prompt from localStorage
+    const prompt = localStorage.getItem("userPrompt") || "";
+    setUserPrompt(prompt);
   }, [searchParams]);
 
   const handleAuth = (mode: 'login' | 'signup') => {
@@ -42,8 +47,9 @@ export default function ResultsPage() {
       <Header isLoggedIn={isLoggedIn} onAuth={handleAuth} />
       <main className="flex-1">
         <ResultsStep 
+          userPrompt={userPrompt}
           isLoggedIn={isLoggedIn}
-          onAuth={handleAuth}
+          onAuth={() => handleAuth('signup')}
           onBackToLanding={handleBackToLanding}
         />
       </main>
