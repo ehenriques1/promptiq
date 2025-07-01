@@ -1,52 +1,66 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, AlertTriangle, Copy, Save, ArrowLeft, Loader2, FileText, Code } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { CheckCircle, AlertTriangle, Copy, Save, ArrowLeft, Loader2, FileText, Code, Check } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Eye } from "lucide-react"
+import { toast } from "sonner"
 
 interface ResultsStepProps {
+  userPrompt: string
   isLoggedIn: boolean
-  onAuth: (mode: "login" | "signup") => void
+  onAuth: () => void
   onBackToLanding: () => void
 }
 
-interface PromptAnalysis {
-  strengths: string[]
-  improvements: string[]
-  optimizedPrompt: string
-  rawData?: any // Store the raw API response for JSON view
+interface Analysis {
+  strengths?: string[]
+  improvements?: string[]
+  improved_prompt?: string
+  framework_coverage?: string[]
+  score?: number
+  recommendations?: string[]
 }
 
-export function ResultsStep({ isLoggedIn, onAuth, onBackToLanding }: ResultsStepProps) {
-  const [analysis, setAnalysis] = useState<PromptAnalysis | null>(null)
+export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }: ResultsStepProps) {
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [originalPrompt, setOriginalPrompt] = useState("")
-  const [copying, setCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [showJson, setShowJson] = useState(false)
-  const { toast } = useToast()
+  const [jsonData, setJsonData] = useState<any>(null)
 
   useEffect(() => {
-    const prompt = localStorage.getItem("userPrompt") || ""
-    setOriginalPrompt(prompt)
     const evaluatePrompt = async () => {
       try {
         setLoading(true)
-        const response = await fetch("/api/evaluate-prompt", {
-          method: "POST",
+        setError(null)
+
+        const response = await fetch('/api/evaluate-prompt', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ prompt: userPrompt }),
         })
 
         if (!response.ok) {
-          throw new Error("Failed to evaluate prompt")
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
 
         const data = await response.json()
+        
+        // Handle InvalidPrompt error
+        if (data.error === "InvalidPrompt") {
+          toast.error(data.message || "Please submit a longer, instruction-style prompt.")
+          setError(data.message || "Please submit a longer, instruction-style prompt.")
+          setLoading(false)
+          return
+        }
+
         // Try both v0 and new format
         let parsed: any = null
         try {
@@ -54,175 +68,58 @@ export function ResultsStep({ isLoggedIn, onAuth, onBackToLanding }: ResultsStep
         } catch {
           parsed = data
         }
-        
-        // Handle InvalidPrompt error
-        if (parsed.error === "InvalidPrompt") {
-          toast({
-            title: "Invalid Prompt",
-            description: parsed.message || "Please submit a longer, instruction-style prompt.",
-            variant: "destructive",
-            className: "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md text-center"
-          })
-          setError(parsed.message || "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation.")
-          setLoading(false)
-          return
+
+        setJsonData(parsed)
+
+        // Extract data with fallbacks
+        const extractedAnalysis: Analysis = {
+          strengths: parsed.strengths || parsed.what_works || [],
+          improvements: parsed.improvements || parsed.what_needs_improvement || [],
+          improved_prompt: parsed.improved_prompt || parsed.better_prompt || "",
+          framework_coverage: parsed.framework_coverage || [],
+          score: parsed.score || 0,
+          recommendations: parsed.recommendations || [],
         }
-        
-        // Handle new Kulkan PromptIQ Evaluator format
-        if (parsed.overall_score !== undefined) {
-          // New format - extract strengths from framework coverage
-          const strengths = []
-          const improvements = parsed.improvements || []
-          
-          // Generate strengths from framework coverage
-          if (parsed.framework_coverage) {
-            const matchedFrameworks = Object.entries(parsed.framework_coverage)
-              .filter(([_, status]) => status === "match")
-              .map(([framework, _]) => framework)
-            
-            if (matchedFrameworks.length > 0) {
-              strengths.push(`Uses ${matchedFrameworks.length} elite prompt framework${matchedFrameworks.length > 1 ? 's' : ''}: ${matchedFrameworks.join(', ')}`)
-            }
-            
-            const partialFrameworks = Object.entries(parsed.framework_coverage)
-              .filter(([_, status]) => status === "partial")
-              .map(([framework, _]) => framework)
-            
-            if (partialFrameworks.length > 0) {
-              strengths.push(`Shows elements of: ${partialFrameworks.join(', ')}`)
-            }
-          }
-          
-          // Add score-based strengths
-          if (parsed.overall_score >= 15) {
-            strengths.push("High overall quality score")
-          } else if (parsed.overall_score >= 10) {
-            strengths.push("Good foundation with room for improvement")
-          }
-          
-          // Fallback strengths if none generated
-          if (strengths.length === 0) {
-            strengths.push("The prompt provides a clear task or request")
-          }
-          
-          setAnalysis({
-            strengths: strengths,
-            improvements: improvements,
-            optimizedPrompt: parsed.improved_prompt || "",
-            rawData: parsed // Store the full JSON response
-          })
-        } else {
-          // Legacy format handling
-          let strengths = parsed.strengths || []
-          let improvements = parsed.improvements || []
-          
-          // If no strengths/improvements from API, generate them from other fields
-          if (strengths.length === 0) {
-            strengths = []
-            if (parsed.clarity && parsed.clarity.includes("good") || parsed.clarity.includes("clear")) {
-              strengths.push("Clear and understandable instructions")
-            }
-            if (parsed.specificity && parsed.specificity.includes("good") || parsed.specificity.includes("specific")) {
-              strengths.push("Specific and detailed requirements")
-            }
-            if (parsed.context && parsed.context.includes("good") || parsed.context.includes("context")) {
-              strengths.push("Good context provided")
-            }
-            if (strengths.length === 0) {
-              strengths = ["The prompt provides a clear task or request"]
-            }
-          }
-          
-          if (improvements.length === 0) {
-            improvements = parsed.suggestions || []
-            if (improvements.length === 0) {
-              improvements = ["Consider adding more specific constraints", "Provide additional context if needed"]
-            }
-          }
-          
-          setAnalysis({
-            strengths: strengths,
-            improvements: improvements,
-            optimizedPrompt: parsed.optimizedPrompt || parsed.improved_prompt || "",
-            rawData: parsed // Store the full JSON response
-          })
-        }
+
+        setAnalysis(extractedAnalysis)
       } catch (err) {
-        setError("Failed to evaluate prompt. Please try again.")
-        console.error("Error:", err)
+        console.error('Error evaluating prompt:', err)
+        setError('Failed to evaluate prompt. Please try again.')
       } finally {
         setLoading(false)
       }
     }
-    if (prompt) evaluatePrompt()
-    else setLoading(false)
-  }, [])
 
-  const handleCopyPrompt = async () => {
-    if (!analysis?.optimizedPrompt) {
-      toast({
-        title: "No prompt to copy",
-        description: "The improved prompt is not available yet.",
-        variant: "destructive",
-      })
-      return
+    if (userPrompt) {
+      evaluatePrompt()
     }
+  }, [userPrompt])
 
+  const copyToClipboard = async (text: string, type: string) => {
     try {
-      setCopying(true)
-      await navigator.clipboard.writeText(analysis.optimizedPrompt)
-      toast({
-        title: "Copied!",
-        description: "The improved prompt has been copied to your clipboard.",
-      })
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      toast.success(`${type} copied to clipboard!`)
+      setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error("Failed to copy:", err)
-      toast({
-        title: "Copy failed",
-        description: "Please select and copy the text manually.",
-        variant: "destructive",
-      })
-    } finally {
-      setCopying(false)
+      toast.error('Failed to copy to clipboard')
     }
   }
 
-  const handleCopyJson = async () => {
-    if (!analysis?.rawData) {
-      toast({
-        title: "No JSON data available",
-        description: "The detailed analysis data is not available.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setCopying(true)
-      const jsonString = JSON.stringify(analysis.rawData, null, 2)
-      await navigator.clipboard.writeText(jsonString)
-      toast({
-        title: "JSON Copied!",
-        description: "The detailed analysis has been copied to your clipboard.",
-      })
-    } catch (err) {
-      console.error("Failed to copy JSON:", err)
-      toast({
-        title: "Copy failed",
-        description: "Please select and copy the JSON manually.",
-        variant: "destructive",
-      })
-    } finally {
-      setCopying(false)
+  const copyJsonToClipboard = async () => {
+    if (jsonData) {
+      await copyToClipboard(JSON.stringify(jsonData, null, 2), "JSON data")
     }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" style={{ color: "#8b9f47" }} />
-          <p className="text-gray-600">Analyzing your prompt...</p>
+      <div className="min-h-screen bg-white flex flex-col">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">Analyzing your prompt...</p>
+          </div>
         </div>
       </div>
     )
@@ -230,202 +127,225 @@ export function ResultsStep({ isLoggedIn, onAuth, onBackToLanding }: ResultsStep
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            Try Again
-          </Button>
+      <div className="min-h-screen bg-white flex flex-col">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto p-6">
+            <div className="text-red-500 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Evaluation Failed</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <Button onClick={onBackToLanding} className="bg-[#ebfc72] text-black hover:bg-[#e5f666]">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Try Again
+            </Button>
+          </div>
         </div>
       </div>
     )
   }
 
   if (!analysis) {
-    return null
+    return (
+      <div className="min-h-screen bg-white flex flex-col">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-gray-600">No analysis available</p>
+            <Button onClick={onBackToLanding} className="mt-4 bg-[#ebfc72] text-black hover:bg-[#e5f666]">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Landing
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="py-12 flex justify-center bg-[#f9f9f6] min-h-screen">
-      <div className="w-full max-w-2xl space-y-8">
-        {/* View Toggle */}
-        <div className="flex justify-center">
-          <div className="bg-white rounded-lg p-1 shadow-lg border">
-            <div className="flex">
-              <Button
-                onClick={() => setShowJson(false)}
-                variant={!showJson ? "default" : "ghost"}
-                size="sm"
-                className={`flex items-center gap-2 ${!showJson ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`}
-              >
-                <FileText className="h-4 w-4" />
-                Simple View
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <Button 
+            onClick={onBackToLanding} 
+            variant="outline" 
+            className="flex items-center bg-transparent"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowJson(!showJson)}
+              variant="outline"
+              className="flex items-center"
+            >
+              {showJson ? <Eye className="mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />}
+              {showJson ? "Show Text" : "Show JSON"}
+            </Button>
+            
+            {!isLoggedIn && (
+              <Button onClick={onAuth} className="bg-[#ebfc72] text-black hover:bg-[#e5f666]">
+                Create Account to Save
               </Button>
-              <Button
-                onClick={() => setShowJson(true)}
-                variant={showJson ? "default" : "ghost"}
-                size="sm"
-                className={`flex items-center gap-2 ${showJson ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`}
-              >
-                <Code className="h-4 w-4" />
-                JSON Feed
-              </Button>
-            </div>
+            )}
           </div>
         </div>
 
-        {!showJson ? (
-          // Simple Text View
-          <>
-            {/* Original Prompt */}
-            <Card className="shadow-lg border-0 bg-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-gray-800">
-                  📝 Your Original Prompt
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm border">
-                  <pre className="whitespace-pre-wrap text-gray-800">{originalPrompt}</pre>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* What This Prompt Gets Right */}
-            <Card className="shadow-lg border-0 bg-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-700">
-                  <CheckCircle className="h-5 w-5" />
-                  What This Prompt Gets Right
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-gray-700">
-                  {analysis.strengths.map((strength, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                      <span>{strength}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-
-            {/* What Needs Improvement */}
-            <Card className="shadow-lg border-0 bg-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-amber-700">
-                  <AlertTriangle className="h-5 w-5" />
-                  What Needs Improvement
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-gray-700">
-                  {analysis.improvements.map((improvement, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <span>{improvement}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-
-            {/* Improved Prompt */}
-            <Card className="shadow-lg border-0 bg-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2" style={{ color: "#8b9f47" }}>
-                  🛠️ Your Improved Prompt
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm border">
-                  <pre className="whitespace-pre-wrap text-gray-800">{analysis.optimizedPrompt}</pre>
-                </div>
-
-                <div className="flex flex-col gap-4 mt-4">
-                  <Button
-                    onClick={handleCopyPrompt}
-                    disabled={copying || !analysis?.optimizedPrompt}
-                    className="w-full sm:w-auto flex items-center justify-center text-black"
-                    style={{ backgroundColor: "#ebfc72" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e5f666")}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ebfc72")}
-                  >
-                    {copying ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Copy className="mr-2 h-4 w-4" />
-                    )}
-                    {copying ? "Copying..." : "Copy Improved Prompt"}
-                  </Button>
-
-                  {isLoggedIn ? (
-                    <Button variant="outline" className="w-full sm:w-auto flex items-center justify-center bg-transparent">
-                      <Save className="mr-2 h-4 w-4" />
-                      Save to My Prompts
-                    </Button>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-sm text-gray-600 text-center sm:text-left">
-                        Sign up to save your improved prompt and view your prompt history
-                      </p>
-                      <Button onClick={() => onAuth("signup")} variant="outline" className="w-full sm:w-auto bg-transparent">
-                        Create Account to Save
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          // JSON Feed View
-          <Card className="shadow-lg border-0 bg-white">
+        {showJson ? (
+          /* JSON View */
+          <Card className="mb-6">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-gray-800">
-                <Code className="h-5 w-5" />
-                Detailed Analysis (JSON)
+              <CardTitle className="flex items-center justify-between">
+                JSON Response
+                <Button
+                  onClick={copyJsonToClipboard}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center"
+                >
+                  {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                  {copied ? "Copied!" : "Copy JSON"}
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm border max-h-96 overflow-auto">
-                <pre className="whitespace-pre-wrap text-gray-800">
-                  {JSON.stringify(analysis.rawData, null, 2)}
-                </pre>
-              </div>
-              
-              <div className="flex flex-col gap-4 mt-4">
-                <Button
-                  onClick={handleCopyJson}
-                  disabled={copying || !analysis?.rawData}
-                  className="w-full sm:w-auto flex items-center justify-center text-black"
-                  style={{ backgroundColor: "#ebfc72" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e5f666")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ebfc72")}
-                >
-                  {copying ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Copy className="mr-2 h-4 w-4" />
-                  )}
-                  {copying ? "Copying..." : "Copy JSON Data"}
-                </Button>
-                
-                <p className="text-sm text-gray-600 text-center">
-                  This JSON contains the complete analysis including framework coverage, scores, and detailed metrics.
-                </p>
-              </div>
+              <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
+                {JSON.stringify(jsonData, null, 2)}
+              </pre>
             </CardContent>
           </Card>
-        )}
+        ) : (
+          /* Text View */
+          <>
+            {/* Original Prompt */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Your Original Prompt</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-700 whitespace-pre-wrap">{userPrompt}</p>
+              </CardContent>
+            </Card>
 
-        <div className="flex justify-center pt-6">
-          <Button onClick={onBackToLanding} variant="outline" className="flex items-center gap-2 bg-transparent">
-            <ArrowLeft className="h-4 w-4" />
-            Evaluate Another Prompt
-          </Button>
-        </div>
+            {/* Framework Coverage */}
+            {analysis.framework_coverage && analysis.framework_coverage.length > 0 && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Framework Coverage</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {analysis.framework_coverage.map((framework, index) => (
+                      <Badge key={index} variant="secondary">
+                        {framework}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Score */}
+            {analysis.score !== undefined && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Overall Score</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-[#ebfc72] bg-black px-4 py-2 rounded-lg inline-block">
+                    {analysis.score}/10
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Strengths */}
+            {analysis.strengths && analysis.strengths.length > 0 && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>What This Prompt Gets Right</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {analysis.strengths.map((strength, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-green-500 mr-2">✓</span>
+                        <span className="text-gray-700">{strength}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Improvements */}
+            {analysis.improvements && analysis.improvements.length > 0 && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>What Needs Improvement</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {analysis.improvements.map((improvement, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-yellow-500 mr-2">⚠</span>
+                        <span className="text-gray-700">{improvement}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Recommendations */}
+            {analysis.recommendations && analysis.recommendations.length > 0 && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Recommendations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {analysis.recommendations.map((recommendation, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-blue-500 mr-2">💡</span>
+                        <span className="text-gray-700">{recommendation}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Improved Prompt */}
+            {analysis.improved_prompt && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    Your Improved Prompt
+                    <Button
+                      onClick={() => copyToClipboard(analysis.improved_prompt!, "Improved prompt")}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center"
+                    >
+                      {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                      {copied ? "Copied!" : "Copy"}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-gray-700 whitespace-pre-wrap">{analysis.improved_prompt}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
