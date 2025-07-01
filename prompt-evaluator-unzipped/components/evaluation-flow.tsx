@@ -1,12 +1,15 @@
 "use client"
 
 import { PromptInput } from "@/components/prompt-input"
+import { PaymentStep } from "@/components/payment-step"
 import { ResultsStep } from "@/components/results-step"
 
 interface EvaluationFlowProps {
-  currentStep: "input" | "results"
+  currentStep: "input" | "payment" | "results"
   userPrompt: string
   isLoggedIn: boolean
+  onPromptSubmit: (prompt: string) => void
+  onPaymentComplete: () => void
   onAuth: (mode: "login" | "signup") => void
   onBackToLanding: () => void
 }
@@ -15,6 +18,8 @@ export function EvaluationFlow({
   currentStep,
   userPrompt,
   isLoggedIn,
+  onPromptSubmit,
+  onPaymentComplete,
   onAuth,
   onBackToLanding,
 }: EvaluationFlowProps) {
@@ -39,6 +44,20 @@ export function EvaluationFlow({
 
               <div className="w-8 h-0.5 bg-gray-200"></div>
 
+              <div className={`flex items-center ${currentStep === "payment" ? "text-gray-800" : "text-gray-400"}`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                    currentStep === "payment" ? "text-black" : "bg-gray-200"
+                  }`}
+                  style={currentStep === "payment" ? { backgroundColor: "#ebfc72" } : {}}
+                >
+                  2
+                </div>
+                <span className="ml-2 text-sm font-medium hidden sm:inline">Payment</span>
+              </div>
+
+              <div className="w-8 h-0.5 bg-gray-200"></div>
+
               <div className={`flex items-center ${currentStep === "results" ? "text-gray-800" : "text-gray-400"}`}>
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -46,14 +65,16 @@ export function EvaluationFlow({
                   }`}
                   style={currentStep === "results" ? { backgroundColor: "#ebfc72" } : {}}
                 >
-                  2
+                  3
                 </div>
                 <span className="ml-2 text-sm font-medium hidden sm:inline">Results</span>
               </div>
             </div>
           </div>
 
-          {currentStep === "input" && <PromptInput onBack={onBackToLanding} />}
+          {currentStep === "input" && <PromptInput onSubmit={onPromptSubmit} onBack={onBackToLanding} />}
+
+          {currentStep === "payment" && <PaymentStep onComplete={onPaymentComplete} onBack={() => {}} />}
 
           {currentStep === "results" && (
             <ResultsStep

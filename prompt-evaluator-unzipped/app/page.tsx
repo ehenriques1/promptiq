@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import { useState } from "react"
 import { Header } from "@/components/header"
@@ -68,4 +68,4 @@ export default function Home() {
       />
     </div>
   )
-} 
+}

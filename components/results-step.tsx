@@ -4,9 +4,9 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, AlertTriangle, Copy, Save, ArrowLeft, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface ResultsStepProps {
-  userPrompt: string
   isLoggedIn: boolean
   onAuth: (mode: "login" | "signup") => void
   onBackToLanding: () => void
@@ -18,12 +18,17 @@ interface PromptAnalysis {
   optimizedPrompt: string
 }
 
-export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }: ResultsStepProps) {
+export function ResultsStep({ isLoggedIn, onAuth, onBackToLanding }: ResultsStepProps) {
   const [analysis, setAnalysis] = useState<PromptAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [originalPrompt, setOriginalPrompt] = useState("")
+  const [copying, setCopying] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
+    const prompt = localStorage.getItem("userPrompt") || ""
+    setOriginalPrompt(prompt)
     const evaluatePrompt = async () => {
       try {
         setLoading(true)
@@ -32,7 +37,7 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ prompt: userPrompt }),
+          body: JSON.stringify({ prompt }),
         })
 
         if (!response.ok) {
@@ -40,7 +45,91 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
         }
 
         const data = await response.json()
-        setAnalysis(data)
+        // Try both v0 and new format
+        let parsed: any = null
+        try {
+          parsed = JSON.parse(data.result)
+        } catch {
+          parsed = data
+        }
+        
+        // Handle new Kulkan PromptIQ Evaluator format
+        if (parsed.overall_score !== undefined) {
+          // New format - extract strengths from framework coverage
+          const strengths = []
+          const improvements = parsed.improvements || []
+          
+          // Generate strengths from framework coverage
+          if (parsed.framework_coverage) {
+            const matchedFrameworks = Object.entries(parsed.framework_coverage)
+              .filter(([_, status]) => status === "match")
+              .map(([framework, _]) => framework)
+            
+            if (matchedFrameworks.length > 0) {
+              strengths.push(`Uses ${matchedFrameworks.length} elite prompt framework${matchedFrameworks.length > 1 ? 's' : ''}: ${matchedFrameworks.join(', ')}`)
+            }
+            
+            const partialFrameworks = Object.entries(parsed.framework_coverage)
+              .filter(([_, status]) => status === "partial")
+              .map(([framework, _]) => framework)
+            
+            if (partialFrameworks.length > 0) {
+              strengths.push(`Shows elements of: ${partialFrameworks.join(', ')}`)
+            }
+          }
+          
+          // Add score-based strengths
+          if (parsed.overall_score >= 15) {
+            strengths.push("High overall quality score")
+          } else if (parsed.overall_score >= 10) {
+            strengths.push("Good foundation with room for improvement")
+          }
+          
+          // Fallback strengths if none generated
+          if (strengths.length === 0) {
+            strengths.push("The prompt provides a clear task or request")
+          }
+          
+          setAnalysis({
+            strengths: strengths,
+            improvements: improvements,
+            optimizedPrompt: parsed.improved_prompt || ""
+          })
+        } else {
+          // Legacy format handling
+          let strengths = parsed.strengths || []
+          let improvements = parsed.improvements || []
+          
+          // If no strengths/improvements from API, generate them from other fields
+          if (strengths.length === 0) {
+            strengths = []
+            if (parsed.clarity && parsed.clarity.includes("good") || parsed.clarity.includes("clear")) {
+              strengths.push("Clear and understandable instructions")
+            }
+            if (parsed.specificity && parsed.specificity.includes("good") || parsed.specificity.includes("specific")) {
+              strengths.push("Specific and detailed requirements")
+            }
+            if (parsed.context && parsed.context.includes("good") || parsed.context.includes("context")) {
+              strengths.push("Good context provided")
+            }
+            if (strengths.length === 0) {
+              strengths = ["The prompt provides a clear task or request"]
+            }
+          }
+          
+          if (improvements.length === 0) {
+            improvements = parsed.suggestions || []
+            if (improvements.length === 0) {
+              improvements = ["Consider adding more specific constraints", "Provide additional context if needed"]
+            }
+          }
+          
+          setAnalysis({
+            strengths: strengths,
+            improvements: improvements,
+            optimizedPrompt: parsed.optimizedPrompt || parsed.improved_prompt || ""
+          })
+        }
       } catch (err) {
         setError("Failed to evaluate prompt. Please try again.")
         console.error("Error:", err)
@@ -48,13 +137,36 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
         setLoading(false)
       }
     }
+    if (prompt) evaluatePrompt()
+    else setLoading(false)
+  }, [])
 
-    evaluatePrompt()
-  }, [userPrompt])
+  const handleCopyPrompt = async () => {
+    if (!analysis?.optimizedPrompt) {
+      toast({
+        title: "No prompt to copy",
+        description: "The improved prompt is not available yet.",
+        variant: "destructive",
+      })
+      return
+    }
 
-  const handleCopyPrompt = () => {
-    if (analysis?.optimizedPrompt) {
-      navigator.clipboard.writeText(analysis.optimizedPrompt)
+    try {
+      setCopying(true)
+      await navigator.clipboard.writeText(analysis.optimizedPrompt)
+      toast({
+        title: "Copied!",
+        description: "The improved prompt has been copied to your clipboard.",
+      })
+    } catch (err) {
+      console.error("Failed to copy:", err)
+      toast({
+        title: "Copy failed",
+        description: "Please select and copy the text manually.",
+        variant: "destructive",
+      })
+    } finally {
+      setCopying(false)
     }
   }
 
@@ -87,95 +199,116 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
   }
 
   return (
-    <div className="space-y-6">
-      {/* What Works */}
-      <Card className="shadow-lg border-0 bg-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-green-700">
-            <CheckCircle className="h-5 w-5" />
-            What This Prompt Gets Right
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2 text-gray-700">
-            {analysis.strengths.map((strength, index) => (
-              <li key={index} className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span>{strength}</span>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+    <div className="py-12 flex justify-center bg-[#f9f9f6] min-h-screen">
+      <div className="w-full max-w-2xl space-y-8">
+        {/* Original Prompt */}
+        <Card className="shadow-lg border-0 bg-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-gray-800">
+              📝 Your Original Prompt
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm border">
+              <pre className="whitespace-pre-wrap text-gray-800">{originalPrompt}</pre>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* What Needs Improvement */}
-      <Card className="shadow-lg border-0 bg-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-amber-700">
-            <AlertTriangle className="h-5 w-5" />
-            What Needs Improvement
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2 text-gray-700">
-            {analysis.improvements.map((improvement, index) => (
-              <li key={index} className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <span>{improvement}</span>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+        {/* What This Prompt Gets Right */}
+        <Card className="shadow-lg border-0 bg-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="h-5 w-5" />
+              What This Prompt Gets Right
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-gray-700">
+              {analysis.strengths.map((strength, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span>{strength}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
 
-      {/* Improved Prompt */}
-      <Card className="shadow-lg border-0 bg-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2" style={{ color: "#8b9f47" }}>
-            🛠 Your Improved Prompt
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm border">
-            <pre className="whitespace-pre-wrap text-gray-800">{analysis.optimizedPrompt}</pre>
-          </div>
+        {/* What Needs Improvement */}
+        <Card className="shadow-lg border-0 bg-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" />
+              What Needs Improvement
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-gray-700">
+              {analysis.improvements.map((improvement, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <span>{improvement}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
 
-          <div className="flex flex-col gap-4 mt-4">
-            <Button
-              onClick={handleCopyPrompt}
-              className="w-full sm:w-auto flex items-center justify-center text-black"
-              style={{ backgroundColor: "#ebfc72" }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e5f666")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ebfc72")}
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copy Improved Prompt
-            </Button>
+        {/* Improved Prompt */}
+        <Card className="shadow-lg border-0 bg-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2" style={{ color: "#8b9f47" }}>
+              🛠️ Your Improved Prompt
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm border">
+              <pre className="whitespace-pre-wrap text-gray-800">{analysis.optimizedPrompt}</pre>
+            </div>
 
-            {isLoggedIn ? (
-              <Button variant="outline" className="w-full sm:w-auto flex items-center justify-center bg-transparent">
-                <Save className="mr-2 h-4 w-4" />
-                Save to My Prompts
+            <div className="flex flex-col gap-4 mt-4">
+              <Button
+                onClick={handleCopyPrompt}
+                disabled={copying || !analysis?.optimizedPrompt}
+                className="w-full sm:w-auto flex items-center justify-center text-black"
+                style={{ backgroundColor: "#ebfc72" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e5f666")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ebfc72")}
+              >
+                {copying ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Copy className="mr-2 h-4 w-4" />
+                )}
+                {copying ? "Copying..." : "Copy Improved Prompt"}
               </Button>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-600 text-center sm:text-left">
-                  Sign up to save your improved prompt and view your prompt history
-                </p>
-                <Button onClick={() => onAuth("signup")} variant="outline" className="w-full sm:w-auto bg-transparent">
-                  Create Account to Save
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
-      <div className="flex justify-center pt-6">
-        <Button onClick={onBackToLanding} variant="outline" className="flex items-center gap-2 bg-transparent">
-          <ArrowLeft className="h-4 w-4" />
-          Evaluate Another Prompt
-        </Button>
+              {isLoggedIn ? (
+                <Button variant="outline" className="w-full sm:w-auto flex items-center justify-center bg-transparent">
+                  <Save className="mr-2 h-4 w-4" />
+                  Save to My Prompts
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600 text-center sm:text-left">
+                    Sign up to save your improved prompt and view your prompt history
+                  </p>
+                  <Button onClick={() => onAuth("signup")} variant="outline" className="w-full sm:w-auto bg-transparent">
+                    Create Account to Save
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-center pt-6">
+          <Button onClick={onBackToLanding} variant="outline" className="flex items-center gap-2 bg-transparent">
+            <ArrowLeft className="h-4 w-4" />
+            Evaluate Another Prompt
+          </Button>
+        </div>
       </div>
     </div>
   )

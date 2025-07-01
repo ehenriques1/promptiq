@@ -1,54 +1,25 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, ArrowRight } from "lucide-react"
 
 interface PromptInputProps {
+  onSubmit: (prompt: string) => void
   onBack: () => void
 }
 
-export function PromptInput({ onBack }: PromptInputProps) {
+export function PromptInput({ onSubmit, onBack }: PromptInputProps) {
   const [prompt, setPrompt] = useState("")
-  const router = useRouter()
 
   const handleSubmit = () => {
-    if (!prompt.trim()) return
-    localStorage.setItem("userPrompt", prompt)
-    const toolPrompt = `You are a senior prompt strategist trained in evaluating and optimizing AI prompts across diverse use cases (chat, classification, generation, reasoning, etc.). Your job is to audit the structure, clarity, intent, and effectiveness of a given prompt and return a clean, structured analysis in strict JSON format.
-
-Please analyze the following prompt using the criteria below:
-
-1. Clarity: Is the prompt unambiguous and well-structured?
-2. Intent Alignment: Does the prompt clearly communicate its goal to the model?
-3. Framework Fit: Does it follow any recognized best-practice prompt patterns (e.g., role-based, step-by-step, zero/few-shot)?
-4. Risk Factors: Any signs of vague phrasing, overload, conflicting tasks, or hallucination risk?
-5. Output Constraints: Are there formatting, tone, or content structure requirements?
-
-Return only valid JSON in this format:
-
-{
-  "strengths": [
-    "Clearly specifies the assistant's role as a summarizer.",
-    "Includes structured formatting instructions for the output."
-  ],
-  "improvements": [
-    "Prompt is overly broad in intent — could be narrowed to a specific task.",
-    "Missing example output for clearer alignment."
-  ],
-  "optimizedPrompt": "You are a summarization assistant tasked with distilling long-form text into 3 bullet points. Use clear, concise language and maintain factual integrity. Output must be in Markdown format."
-}
-
-Only output valid JSON. Do not explain your reasoning outside the JSON block.
-
-Evaluate this prompt:`
-    localStorage.setItem("toolPrompt", toolPrompt)
-    router.push("/results") // we'll simulate post-payment result view
+    if (prompt.trim()) {
+      onSubmit(prompt)
+    }
   }
 
   return (
@@ -89,7 +60,7 @@ Evaluate this prompt:`
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e5f666")}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ebfc72")}
           >
-            Continue to Results
+            Continue to Payment
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
