@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, ArrowRight } from "lucide-react"
+import { PaymentButton } from "@/components/payment-button"
 
 interface PromptInputProps {
   onBack: () => void
@@ -81,17 +82,10 @@ Evaluate this prompt:`
             Back
           </Button>
 
-          <Button
-            onClick={handleSubmit}
-            disabled={!prompt.trim()}
-            className="flex-1 text-black py-3"
-            style={{ backgroundColor: "#ebfc72" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e5f666")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ebfc72")}
-          >
-            Continue to Results
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+          <PaymentButton 
+            prompt={prompt}
+            className="flex-1 text-black py-3 bg-[#ebfc72] hover:bg-[#e5f666]"
+          />
         </div>
       </CardContent>
     </Card>

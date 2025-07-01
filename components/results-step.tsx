@@ -55,6 +55,19 @@ export function ResultsStep({ isLoggedIn, onAuth, onBackToLanding }: ResultsStep
           parsed = data
         }
         
+        // Handle InvalidPrompt error
+        if (parsed.error === "InvalidPrompt") {
+          toast({
+            title: "Invalid Prompt",
+            description: parsed.message || "Please submit a longer, instruction-style prompt.",
+            variant: "destructive",
+            className: "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md text-center"
+          })
+          setError(parsed.message || "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation.")
+          setLoading(false)
+          return
+        }
+        
         // Handle new Kulkan PromptIQ Evaluator format
         if (parsed.overall_score !== undefined) {
           // New format - extract strengths from framework coverage

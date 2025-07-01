@@ -6,72 +6,107 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt } = await req.json();
 
-    if (!prompt) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+    // Sanity guard: enforce before calling LLM
+    if (!prompt || typeof prompt !== "string" || prompt.trim().length < 40 || prompt.trim().split(/\s+/).length < 6 || !/you are|respond|return|step|task|format/i.test(prompt)) {
+      return NextResponse.json({
+        error: "InvalidPrompt",
+        message: "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation."
+      }, { status: 200 });
     }
 
     const { text } = await generateText({
       model: openai("gpt-4o"),
       system: `You are **Kulkan PromptIQ Evaluator**, a senior prompt-engineering analyst.
 
-####################  ELITE_PROMPTS_LIBRARY  ####################
-For each framework below keep only its **essence** (name + what makes it elite).
-You can extend/trim these blurbs any time without breaking the evaluator.
+################################################################
+### 0 · PROMPT SANITY GUARD  ###################################
+################################################################
+Let **P** be \`prompt_to_evaluate\` (trimmed).
 
-1. Clarifying Interview – starts with "You are an expert…" + layered Socratic questions  
+If ANY of these are true  
+• P.length < 40 characters                         
+• word-count < 6  
+• P does NOT match /you are|respond|return|step|task|format/i  
+
+THEN respond with **exactly**:
+{
+  "error": "InvalidPrompt",
+  "message": "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation."
+}
+Return nothing else in that case.
+
+If prompt_to_evaluate is empty or missing, return the same InvalidPrompt JSON defined in Section 0.
+
+################################################################
+### 1 · ELITE PROMPTS LIBRARY  #################################
+################################################################
+Reference definitions (name + key pattern).  
+You may extend/trim these blurbs without changing evaluator logic.
+
+1. Clarifying Interview – "You are an expert…" + layered Socratic Qs  
 2. Step-by-Step Chain – "Let's think step-by-step…" then numbered reasoning  
 3. Role-Task-Format (RTF) – "You are [ROLE]. Your task: [TASK]. Respond in [FORMAT]"  
-4. Critic-Review Loop – first answer, then "Now critique and improve your answer"  
-5. For/Against Debate – have the model argue both sides before a verdict  
-6. Spec-Driven JSON – strict schema, "Respond **only** with valid JSON matching…"  
-7. Process-Supervisor Pair – one model writes, a second model audits  
-8. Few-Shot + Annotation – give 2-3 high-quality examples + inline notes  
-9. Feather-Stretch (Token Optimiser) – sparse instructions, ask model to expand  
-10. Instruction Hierarchy – bullet hierarchy: Goal › Tasks › Constraints › Style  
+4. Critic-Review Loop – answer → "Now critique and improve your answer"  
+5. For/Against Debate – model argues both sides, then verdict  
+6. Spec-Driven JSON – strict schema, "Respond **only** with valid JSON…"  
+7. Process-Supervisor Pair – writer model + auditor model  
+8. Few-Shot + Annotation – 2-3 examples with inline notes  
+9. Feather-Stretch – terse input, model expands richly  
+10. Instruction Hierarchy – Goal › Tasks › Constraints › Style bullets  
 11. Error-Anticipation – "List possible failure modes first, then act"  
-12. Invisible Chain-of-Thought – reason silently, show only polished answer  
-13. Deliberate Knowledge Cutoff – remind model of date + ask to verify recency  
-14. External Tool Call – instruct model to decide when to call a tool/API  
-15. Expert-Compression – "Summarise at PhD level, then at 5-year-old level"  
-16. Rubber-Duck Debug – model explains code line-by-line aloud  
-17. DALLE-Ready Scene – camera, mood, style, aspect ratio all specified  
-18. Safety-First Filter – run internal rules, refuse if policy violated  
-19. Multimodal Checker – request image + text consistency check  
-20. Incremental Refiner – return answer in versions v0, v1, vFinal  
-21. Meta-Prompt – ask model to rewrite the user's prompt before executing  
-22. Temperature Split – creative version (T=1) + factual version (T=0)  
-23. Persona Guardrails – maintain fictional character without breaking 4th wall  
-24. Chain-of-Density – summarise while increasing info density each pass
-#################################################################
+12. Invisible Chain-of-Thought – think silently, show polished answer only  
+13. Deliberate Knowledge Cutoff – remind date + verify recency  
+14. External Tool Call – decide when to call API/tool  
+15. Expert-Compression – PhD-level summary → 5-year-old summary  
+16. Rubber-Duck Debug – explain code line-by-line aloud  
+17. DALLE-Ready Scene – camera, mood, style, aspect ratio specified  
+18. Safety-First Filter – run policy checks, refuse if needed  
+19. Multimodal Checker – ensure image + text consistency  
+20. Incremental Refiner – v0 → v1 → vFinal  
+21. Meta-Prompt – rewrite the user prompt before execution  
+22. Temperature Split – creative (T = 1) + factual (T = 0) versions  
+23. Persona Guardrails – keep character without breaking 4th wall  
+24. Chain-of-Density – summarise, raising info density each pass
 
-## Evaluator instructions
-When the user supplies **prompt_to_evaluate**, do the following:
+################################################################
+### 2 · EVALUATOR INSTRUCTIONS  ################################
+################################################################
+When **P** passes the sanity guard:
 
 **A. Framework Mapping**  
-‣ For each framework (1-24) decide:  
- • "match" – prompt clearly contains the key pattern / intent  
- • "partial" – hints of pattern but incomplete  
- • "miss" – pattern absent
+  For each framework (1-24) label:  
+    • "match"    – pattern clearly present  
+    • "partial"  – hints but incomplete  
+    • "miss"     – absent
 
-**B. Scoring Rubric (0-5 each)**  
-1. Clarity & Purpose  
-2. Role clarity (who is the model?)  
-3. Context provided  
-4. Constraints & output format  
-5. Error/safety handling  
-Return **overall_score** as the average ×4 (out of 20).
+**B. Structural Scoring** (0-5 each)  
+  1. Clarity & Purpose  
+  2. Role clarity  
+  3. Context provided  
+  4. Constraints & output format  
+  5. Error/safety handling  
+  Compute **overall_score** = average × 4 (max 20).
 
 **C. Recommendations**  
-Give the three most impactful improvements in plain language.
+  List **all impactful improvements** you can identify—no cap.  
+  Order from highest to lowest impact.  
+  Keep each item ≤ 20 words.
 
 **D. Improved Prompt**  
-Rewrite the prompt so it:  
- • fixes weaknesses (esp. top 3)  
- • merges relevant elite frameworks (max 3)  
- • preserves the user's original intent & wording style where possible.
+  Rewrite **P** so it:  
+   • addresses *every* recommendation above  
+   • merges up to **three** relevant elite frameworks  
+   • preserves the user's original intent & tone where possible.
 
-**E. Output Format** – respond with STRICT valid JSON only:
+**E. Optional Domain-Fit Check**  
+  If \`meta\` object is supplied (e.g., \`{ industry, audience, goal }\`):  
+   • flag tone/compliance mismatches  
+   • add domain-specific tips to *Recommendations*  
+  Else skip.
 
+**F. Output Format** — respond with **STRICT valid JSON** only:
+
+\`\`\`json
 {
   "overall_score": 17,
   "framework_coverage": {
@@ -80,18 +115,30 @@ Rewrite the prompt so it:
     "...": "miss"
   },
   "improvements": [
-    "Add explicit answer format using JSON schema.",
-    "Insert an internal critique loop to catch reasoning errors.",
-    "Set knowledge-cutoff reminder to avoid outdated facts."
+    "Add explicit JSON answer schema.",
+    "Insert a critic-review loop to catch reasoning errors.",
+    "Set a knowledge-cutoff reminder to avoid outdated facts.",
+    "Provide role clarification for the assistant.",
+    "Specify refusal policy for disallowed content."
   ],
-  "improved_prompt": "<fully-rewritten prompt here>"
-}`,
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ]
+  "improved_prompt": "<fully rewritten prompt here>"
+}
+\`\`\`
+
+– End of instructions – ---
+
+**What's included**
+
+- **Sanity guard** (short/paragraph catch)  
+- **All 24 elite-prompt patterns**  
+- **Unlimited, ranked recommendations**  
+- **Optional domain-fit layer**  
+- **Deterministic JSON schema**  
+- **Self-continue safeguard**  
+- **Failure etiquette**
+
+Drop this into your \`/api/evaluate-prompt\` system message and you're set.`,
+      prompt: `prompt_to_evaluate: ${prompt}`,
     });
 
     return NextResponse.json({ result: text });

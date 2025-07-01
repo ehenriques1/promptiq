@@ -1,16 +1,27 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ResultsStep } from '../../components/results-step';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { AuthModal } from '@/components/auth-modal';
 import { Toaster } from '@/components/ui/toaster';
+import { toast } from 'sonner';
 
 export default function ResultsPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
+  const searchParams = useSearchParams();
+
+  // Handle payment success
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    if (sessionId) {
+      toast.success('Payment successful! Your prompt evaluation is ready.');
+    }
+  }, [searchParams]);
 
   const handleAuth = (mode: 'login' | 'signup') => {
     setAuthMode(mode);
