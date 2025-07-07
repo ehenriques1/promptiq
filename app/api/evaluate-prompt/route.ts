@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import OpenAI from "openai";
 
 // In-memory store for usage tracking (in production, use a database)
 const usageStore = new Map<string, { count: number; lastUsed: string }>()
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 function getClientIP(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for')
@@ -54,9 +57,12 @@ export async function POST(req: NextRequest) {
     }
     usageStore.set(ip, newUsage)
 
-    const { text } = await generateText({
-      model: openai("gpt-4o"),
-      system: `You are **Kulkan PromptIQ Evaluator**, a senior prompt-engineering analyst.
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are **Kulkan PromptIQ Evaluator**, a senior prompt-engineering analyst.
 
 ################################################################
 ### 0 · PROMPT SANITY GUARD  ###################################
@@ -177,9 +183,16 @@ When **P** passes the sanity guard:
 - **Self-continue safeguard**  
 - **Failure etiquette**
 
-Drop this into your \`/api/evaluate-prompt\` system message and you're set.`,
-      prompt: `prompt_to_evaluate: ${prompt}`,
+Drop this into your \`/api/evaluate-prompt\` system message and you're set.`
+        },
+        {
+          role: "user",
+          content: `prompt_to_evaluate: ${prompt}`
+        }
+      ],
     });
+
+    const text = completion.choices[0]?.message?.content || "No response generated";
 
     return NextResponse.json({ result: text });
   } catch (error) {
