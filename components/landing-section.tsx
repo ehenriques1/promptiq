@@ -48,56 +48,75 @@ export function LandingSection({ onStartEvaluation }: LandingSectionProps) {
       <div className="w-full bg-gray-50 mt-20 py-16 sm:py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-12">✅ How It Works</h2>
-
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="text-center">
-                <p className="text-lg text-gray-700 mb-4">
-                  Check your prompt for free — no strings attached.
-                </p>
-                <p className="text-lg text-gray-700 mb-6">
-                  Paste it. Analyze it. Get feedback instantly.
-                </p>
-                <p className="text-lg text-gray-700 mb-8">
-                  But here's the catch: if you leave or refresh the page, your feedback disappears.
-                </p>
-                <p className="text-lg text-gray-700">
-                  Want to track your best prompts, see improvements, and iterate like a pro? That's where PromptIQ shines.
-                </p>
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-16">How It Works</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12 max-w-5xl mx-auto">
+              {/* Step 1 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <Edit3 className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">Input Your Prompt</div>
+                <div className="text-gray-600 text-base text-center">Paste your current prompt into our evaluation tool</div>
+              </div>
+              {/* Step 2 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <CreditCard className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">Secure Payment</div>
+                <div className="text-gray-600 text-base text-center">Quick $5 payment to unlock your personalized analysis</div>
+              </div>
+              {/* Step 3 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <Zap className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">AI Analysis</div>
+                <div className="text-gray-600 text-base text-center">Our AI evaluates against carefully curated elite prompt engineering frameworks in seconds</div>
+              </div>
+              {/* Step 4 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <Download className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">Get Results</div>
+                <div className="text-gray-600 text-base text-center">Receive your optimized prompt with detailed feedback, ready to copy and paste for immediate use</div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* What You Get Section */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          {/* What You Get Section */}
+        <div className="max-w-6xl mx-auto text-center">
           <div className="mt-20">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-8">🚀 What You Get</h2>
-
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="text-center">
-                <p className="text-lg text-gray-700 mb-4">
-                  • 1 free evaluation, no account needed
-                </p>
-                <p className="text-lg text-gray-700 mb-6">
-                  • Or go Pro: just $5/month
-                </p>
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-16">What You Get</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-12 max-w-4xl mx-auto">
+              {/* Feature 1 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <CheckCircle className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">Analyze Structure</div>
+                <div className="text-gray-600 text-base text-center">Compare against 24 elite prompt frameworks</div>
               </div>
-
-              <div className="bg-gray-50 rounded-lg p-6 text-left">
-                <ul className="space-y-3 text-gray-700">
-                  <li>– Analyze up to 10 unique prompts per month</li>
-                  <li>– Track your versions and progress</li>
-                  <li>– Up to 3 revisions per prompt</li>
-                  <li>– All for less than the price of a coffee ☕</li>
-                </ul>
+              {/* Feature 2 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <CheckCircle className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">Get Feedback</div>
+                <div className="text-gray-600 text-base text-center">See what works and what needs improvement</div>
               </div>
-
-              <p className="text-lg text-gray-700 mt-6">
-                See what's working, what's not, and how to consistently get better outputs.
-              </p>
+              {/* Feature 3 */}
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#f5ff8a' }}>
+                  <CheckCircle className="w-10 h-10 text-black" />
+                </div>
+                <div className="text-lg font-bold text-gray-900 mb-1">Improve Results</div>
+                <div className="text-gray-600 text-base text-center">Get an optimized version of your prompt</div>
+              </div>
             </div>
           </div>
         </div>
