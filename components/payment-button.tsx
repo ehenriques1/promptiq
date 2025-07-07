@@ -71,7 +71,7 @@ export function PaymentButton({ prompt, onSuccess, className }: PaymentButtonPro
       ) : (
         <>
           <CreditCard className="mr-2 h-4 w-4" />
-          Get AI Evaluation - $9.99
+          Get my PromptIQ Now
         </>
       )}
     </Button>

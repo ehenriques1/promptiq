@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ResultsStep } from '../../components/results-step';
 import { Header } from '@/components/header';
@@ -9,7 +9,7 @@ import { AuthModal } from '@/components/auth-modal';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from 'sonner';
 
-export default function ResultsPage() {
+function ResultsContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
@@ -64,5 +64,13 @@ export default function ResultsPage() {
       />
       <Toaster />
     </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center">Loading...</div>}>
+      <ResultsContent />
+    </Suspense>
   );
 } 
