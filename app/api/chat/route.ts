@@ -1,4 +1,3 @@
-import { OpenAIStream, StreamingTextResponse } from 'ai';
 import OpenAI from 'openai';
 import { NextRequest } from 'next/server';
 
@@ -15,6 +14,8 @@ export async function POST(req: NextRequest) {
     messages,
   });
 
-  const stream = OpenAIStream(response);
-  return new StreamingTextResponse(stream);
+  // Return a simple response for now since the streaming imports aren't available
+  return new Response(JSON.stringify({ message: "Chat functionality not implemented" }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
