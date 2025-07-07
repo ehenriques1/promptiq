@@ -69,7 +69,7 @@ Evaluate this prompt:`
   }
 
   return (
-    <>
+    <div>
       {showFreeAlert && <FreeModeAlert onDismiss={() => setShowFreeAlert(false)} />}
       
       <div className="space-y-6">
@@ -115,6 +115,6 @@ Evaluate this prompt:`
           </CardContent>
         </Card>
       </div>
-    </>
+    </div>
   )
 }
