@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Eye } from "lucide-react"
 import { toast } from "sonner"
+import { SubscriptionCTA } from "@/components/subscription-cta"
+import { FreeModeAlert } from "@/components/free-mode-alert"
+import { checkServerUsage } from "@/lib/usage-tracker"
 
 interface ResultsStepProps {
   userPrompt: string
@@ -32,6 +35,17 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
   const [copied, setCopied] = useState(false)
   const [showJson, setShowJson] = useState(false)
   const [jsonData, setJsonData] = useState<any>(null)
+  const [canUseFree, setCanUseFree] = useState(true)
+  const [showFreeAlert, setShowFreeAlert] = useState(false)
+
+  useEffect(() => {
+    const checkUsage = async () => {
+      const usage = await checkServerUsage()
+      setCanUseFree(usage.canUseFree)
+      setShowFreeAlert(usage.canUseFree)
+    }
+    checkUsage()
+  }, [])
 
   useEffect(() => {
     const evaluatePrompt = async () => {
@@ -199,7 +213,16 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
 
   return (
     <div className="min-h-screen bg-white">
+      {showFreeAlert && <FreeModeAlert onDismiss={() => setShowFreeAlert(false)} />}
+      
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Subscription CTA */}
+        <div className="mb-8">
+          <SubscriptionCTA variant="results" onSubscribe={() => {
+            // Handle subscription logic here
+            console.log('Subscribe clicked from results')
+          }} />
+        </div>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <Button 

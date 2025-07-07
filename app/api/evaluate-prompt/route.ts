@@ -2,9 +2,42 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
+// In-memory store for usage tracking (in production, use a database)
+const usageStore = new Map<string, { count: number; lastUsed: string }>()
+
+function getClientIP(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  const realIP = request.headers.get('x-real-ip')
+  const cfConnectingIP = request.headers.get('cf-connecting-ip')
+  
+  if (forwarded) {
+    return forwarded.split(',')[0].trim()
+  }
+  if (realIP) {
+    return realIP
+  }
+  if (cfConnectingIP) {
+    return cfConnectingIP
+  }
+  
+  return 'unknown'
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { prompt } = await req.json();
+    
+    // Track usage
+    const ip = getClientIP(req)
+    const currentUsage = usageStore.get(ip) || { count: 0, lastUsed: '' }
+    
+    // Check if this is a free user who has already used their free evaluation
+    if (currentUsage.count >= 1) {
+      return NextResponse.json({
+        error: "FreeLimitExceeded",
+        message: "You've already used your free evaluation. Please upgrade to Pro for unlimited evaluations."
+      }, { status: 200 });
+    }
 
     // Sanity guard: enforce before calling LLM
     if (!prompt || typeof prompt !== "string" || prompt.trim().length < 40 || prompt.trim().split(/\s+/).length < 6 || !/you are|respond|return|step|task|format/i.test(prompt)) {
@@ -13,6 +46,13 @@ export async function POST(req: NextRequest) {
         message: "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation."
       }, { status: 200 });
     }
+
+    // Mark this as a free usage
+    const newUsage = {
+      count: currentUsage.count + 1,
+      lastUsed: new Date().toISOString()
+    }
+    usageStore.set(ip, newUsage)
 
     const { text } = await generateText({
       model: openai("gpt-4o"),
