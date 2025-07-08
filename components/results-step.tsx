@@ -213,7 +213,7 @@ export function ResultsStep({ userPrompt, isLoggedIn, onAuth, onBackToLanding }:
 
   return (
     <div className="min-h-screen bg-white">
-      {showFreeAlert && <FreeModeAlert onDismiss={() => setShowFreeAlert(false)} />}
+      {showFreeAlert && <FreeModeAlert />}
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Subscription CTA */}

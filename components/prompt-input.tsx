@@ -70,7 +70,7 @@ Evaluate this prompt:`
 
   return (
     <div>
-      {showFreeAlert && <FreeModeAlert onDismiss={() => setShowFreeAlert(false)} />}
+      {showFreeAlert && <FreeModeAlert />}
       
       <div className="space-y-6">
         <SubscriptionCTA variant="prompt-input" onSubscribe={() => {
