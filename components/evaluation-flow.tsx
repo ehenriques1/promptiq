@@ -9,6 +9,7 @@ interface EvaluationFlowProps {
   isLoggedIn: boolean
   onAuth: (mode: "login" | "signup") => void
   onBackToLanding: () => void
+  onPromptSubmit: (prompt: string) => void
 }
 
 export function EvaluationFlow({
@@ -17,6 +18,7 @@ export function EvaluationFlow({
   isLoggedIn,
   onAuth,
   onBackToLanding,
+  onPromptSubmit,
 }: EvaluationFlowProps) {
   return (
     <section className="py-8 sm:py-12">
@@ -53,15 +55,18 @@ export function EvaluationFlow({
             </div>
           </div>
 
-          {currentStep === "input" && <PromptInput onBack={onBackToLanding} />}
+          {currentStep === "input" && <PromptInput onBack={onBackToLanding} onSubmit={onPromptSubmit} />}
 
           {currentStep === "results" && (
-            <ResultsStep
-              userPrompt={userPrompt}
-              isLoggedIn={isLoggedIn}
-              onAuth={onAuth}
-              onBackToLanding={onBackToLanding}
-            />
+            <>
+              {console.log('EvaluationFlow: currentStep is results, userPrompt:', userPrompt)}
+              <ResultsStep
+                userPrompt={userPrompt}
+                isLoggedIn={isLoggedIn}
+                onAuth={onAuth}
+                onBackToLanding={onBackToLanding}
+              />
+            </>
           )}
         </div>
       </div>

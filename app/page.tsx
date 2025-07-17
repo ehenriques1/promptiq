@@ -6,6 +6,7 @@ import { LandingSection } from "@/components/landing-section"
 import { EvaluationFlow } from "@/components/evaluation-flow"
 import { AuthModal } from "@/components/auth-modal"
 import { Footer } from "@/components/footer"
+import { FreeModeAlert } from "@/components/free-mode-alert"
 
 export default function Home() {
   const [currentStep, setCurrentStep] = useState<"landing" | "input" | "payment" | "results">("landing")
@@ -19,8 +20,9 @@ export default function Home() {
   }
 
   const handlePromptSubmit = (prompt: string) => {
+    console.log('Main page received prompt:', prompt)
     setUserPrompt(prompt)
-    setCurrentStep("payment")
+    setCurrentStep("results")
   }
 
   const handlePaymentComplete = () => {
@@ -40,21 +42,21 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Header isLoggedIn={isLoggedIn} onAuth={handleAuth} />
-
+      {currentStep === "input" && <FreeModeAlert />}
       <main className="flex-1">
         {currentStep === "landing" && <LandingSection onStartEvaluation={handleStartEvaluation} />}
 
-        {(currentStep === "input" || currentStep === "payment" || currentStep === "results") && (
+        {(currentStep === "input" || currentStep === "results") && (
           <EvaluationFlow
-            currentStep={currentStep}
+            currentStep={currentStep as "input" | "results"}
             userPrompt={userPrompt}
             isLoggedIn={isLoggedIn}
-            onPromptSubmit={handlePromptSubmit}
-            onPaymentComplete={handlePaymentComplete}
             onAuth={handleAuth}
             onBackToLanding={() => setCurrentStep("landing")}
+            onPromptSubmit={handlePromptSubmit}
           />
         )}
+        {/* You may want to handle 'payment' step separately if needed */}
       </main>
 
       <Footer />

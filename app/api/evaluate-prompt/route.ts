@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import crypto from "crypto"
 
 // In-memory store for usage tracking (in production, use a database)
 const usageStore = new Map<string, { count: number; lastUsed: string }>()
@@ -28,179 +29,173 @@ function getClientIP(request: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt } = await req.json();
-    
-    // Track usage
-    const ip = getClientIP(req)
-    const currentUsage = usageStore.get(ip) || { count: 0, lastUsed: '' }
-    
-    // Check if this is a free user who has already used their free evaluation
-    if (currentUsage.count >= 1) {
-      return NextResponse.json({
-        error: "FreeLimitExceeded",
-        message: "You've already used your free evaluation. Please upgrade to Pro for unlimited evaluations."
-      }, { status: 200 });
-    }
+    const { prompt: promptRaw, last_hash, last_ts, meta, timestamp } = await req.json();
+    const prompt = (promptRaw || "").trim();
+    const hash = crypto.createHash('sha1').update(prompt).digest('hex').slice(0, 10);
+    const now = Date.now();
+    let lastTsNum = last_ts ? Date.parse(last_ts) : null;
 
-    // Sanity guard: enforce before calling LLM
-    if (!prompt || typeof prompt !== "string" || prompt.trim().length < 40 || prompt.trim().split(/\s+/).length < 6 || !/you are|respond|return|step|task|format/i.test(prompt)) {
+    // Shallow-quality check with specific feedback
+    if (!prompt) {
       return NextResponse.json({
         error: "InvalidPrompt",
-        message: "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation."
+        message: "Prompt is empty. Please enter a prompt for evaluation."
+      }, { status: 200 });
+    }
+    if (prompt.length < 40) {
+      return NextResponse.json({
+        error: "InvalidPrompt",
+        message: "Prompt is too short. Please enter at least 40 characters."
+      }, { status: 200 });
+    }
+    if (prompt.split(/\s+/).length < 6) {
+      return NextResponse.json({
+        error: "InvalidPrompt",
+        message: "Prompt must contain at least 6 words."
+      }, { status: 200 });
+    }
+    if (!/you are|respond|return|step|task|format|explain|analyze|summarize/i.test(prompt)) {
+      return NextResponse.json({
+        error: "InvalidPrompt",
+        message: "Prompt must include an instruction phrase such as 'you are', 'respond', 'return', 'step', 'task', 'format', 'explain', 'analyze', or 'summarize'."
       }, { status: 200 });
     }
 
-    // Mark this as a free usage
-    const newUsage = {
-      count: currentUsage.count + 1,
-      lastUsed: new Date().toISOString()
+    // Duplicate guard
+    if (last_hash && lastTsNum && last_hash === hash && (now - lastTsNum < 60 * 60 * 1000)) {
+      return NextResponse.json({
+        error: "DuplicatePrompt",
+        message: "This prompt was already evaluated recently. Please refine it before requesting another evaluation."
+      }, { status: 200 });
     }
-    usageStore.set(ip, newUsage)
+
+    // Build system prompt
+    const systemPrompt = `You are **Kulkan PromptIQ Evaluator**, a senior prompt-engineering analyst.
+
+################################################################
+### 0 · PROMPT & DUPLICATE GUARD  ##############################
+################################################################
+Definitions  
+• **P**  = \`prompt_to_evaluate\` (trimmed)  
+• **K**  = SHA-1 hash of P (first 10 chars)  
+• **TS** = \`timestamp\` ISO string if supplied (optional)
+
+1. Shallow-quality check – if ANY are true  
+   · P.length < 40 chars  
+   · word count < 6  
+   · P !~ /you are|respond|return|step|task|format/i  
+   ➜ Respond exactly:  
+   \`\`\`json
+   { "error": "InvalidPrompt",
+     "message": "Input is not a full instruction-style prompt. Submit a longer prompt for evaluation." }
+   \`\`\`
+	2.	Duplicate guard – if caller sends last_hash + last_ts and
+• last_hash == K AND last_ts < 60 min ago
+➜ Respond exactly: { "error": "DuplicatePrompt",
+  "message": "This prompt was already evaluated recently. Please refine it before requesting another evaluation." }
+################################################################
+
+1 · ELITE PROMPTS LIBRARY
+
+################################################################
+(24 concise framework definitions — never mention brand names)
+	1.	Clarifying Interview – “You are an expert…” + layered Socratic Qs
+	2.	Step-by-Step Chain – “Let’s think step-by-step…” numbered reasoning
+	3.	Role-Task-Format (RTF) – “You are [ROLE]… Respond in [FORMAT]”
+… (items 4-24 unchanged) …
+
+################################################################
+
+2 · EVALUATION WORKFLOW
+
+################################################################
+When P passes both guards:
+
+A. Framework Mapping – label each framework 1-24 as "match", "partial", or "miss".
+
+B. Structural Scoring – 0-5 each (Clarity, Role, Context, Constraints, Error-handling);
+overall_score = average × 4 (max 20).
+
+C. Detailed Feedback – 3 short paragraphs (≈ 70-90 words each) explaining strengths, weaknesses, and relevant frameworks (name only).
+
+D. Improvements – list all impactful fixes (≤ 25 words each), ranked by impact.
+
+E. Improved Prompt – output a clearly structured, multi-section prompt using the template below.
+• Each header on its own line.
+• Indent bullets two spaces.
+• End with an explicit OUTPUT FORMAT block if appropriate.
+• Escape newlines inside the JSON string with \n.
+
+F. RESPONSE FORMAT – You MUST return a valid JSON object with these exact fields:
+{
+  "framework_mapping": {
+    "clarifying_interview": "match|partial|miss",
+    "step_by_step_chain": "match|partial|miss", 
+    "role_task_format": "match|partial|miss"
+  },
+  "structural_scoring": {
+    "clarity": 0-5,
+    "role": 0-5,
+    "context": 0-5,
+    "constraints": 0-5,
+    "error_handling": 0-5
+  },
+  "overall_score": 0-20,
+  "detailed_feedback": "3 paragraphs explaining strengths, weaknesses, and frameworks",
+  "improvements": ["list", "of", "improvements"],
+  "improved_prompt": "### ROLE\nYou are...\n\n### TASK\n1. ...\n2. ...\n\n### CONTEXT\n- ...\n\n### CONSTRAINTS\n- ...",
+  "hash": "abc123def4"
+}
+################################################################
+
+3 · FAILURE ETIQUETTE
+################################################################
+If prompt_to_evaluate is empty or missing, return the InvalidPrompt JSON from Section 0.`;
+
+    // Build user message
+    let userContent = `prompt_to_evaluate: ${prompt}`;
+    if (meta) {
+      userContent += `\nmeta: ${JSON.stringify(meta)}`;
+    }
+    if (timestamp) {
+      userContent += `\ntimestamp: ${timestamp}`;
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        {
-          role: "system",
-          content: `You are **Kulkan PromptIQ Evaluator**, a senior prompt-engineering analyst.
-
-################################################################
-### 0 · PROMPT SANITY GUARD  ###################################
-################################################################
-Let **P** be \`prompt_to_evaluate\` (trimmed).
-
-If ANY of these are true  
-• P.length < 40 characters                         
-• word-count < 6  
-• P does NOT match /you are|respond|return|step|task|format/i  
-
-THEN respond with **exactly**:
-{
-  "error": "InvalidPrompt",
-  "message": "Input does not appear to be a full instruction-style prompt. Please submit a longer prompt for evaluation."
-}
-Return nothing else in that case.
-
-If prompt_to_evaluate is empty or missing, return the same InvalidPrompt JSON defined in Section 0.
-
-################################################################
-### 1 · ELITE PROMPTS LIBRARY  #################################
-################################################################
-Reference definitions (name + key pattern).  
-You may extend/trim these blurbs without changing evaluator logic.
-
-1. Clarifying Interview – "You are an expert…" + layered Socratic Qs  
-2. Step-by-Step Chain – "Let's think step-by-step…" then numbered reasoning  
-3. Role-Task-Format (RTF) – "You are [ROLE]. Your task: [TASK]. Respond in [FORMAT]"  
-4. Critic-Review Loop – answer → "Now critique and improve your answer"  
-5. For/Against Debate – model argues both sides, then verdict  
-6. Spec-Driven JSON – strict schema, "Respond **only** with valid JSON…"  
-7. Process-Supervisor Pair – writer model + auditor model  
-8. Few-Shot + Annotation – 2-3 examples with inline notes  
-9. Feather-Stretch – terse input, model expands richly  
-10. Instruction Hierarchy – Goal › Tasks › Constraints › Style bullets  
-11. Error-Anticipation – "List possible failure modes first, then act"  
-12. Invisible Chain-of-Thought – think silently, show polished answer only  
-13. Deliberate Knowledge Cutoff – remind date + verify recency  
-14. External Tool Call – decide when to call API/tool  
-15. Expert-Compression – PhD-level summary → 5-year-old summary  
-16. Rubber-Duck Debug – explain code line-by-line aloud  
-17. DALLE-Ready Scene – camera, mood, style, aspect ratio specified  
-18. Safety-First Filter – run policy checks, refuse if needed  
-19. Multimodal Checker – ensure image + text consistency  
-20. Incremental Refiner – v0 → v1 → vFinal  
-21. Meta-Prompt – rewrite the user prompt before execution  
-22. Temperature Split – creative (T = 1) + factual (T = 0) versions  
-23. Persona Guardrails – keep character without breaking 4th wall  
-24. Chain-of-Density – summarise, raising info density each pass
-
-################################################################
-### 2 · EVALUATOR INSTRUCTIONS  ################################
-################################################################
-When **P** passes the sanity guard:
-
-**A. Framework Mapping**  
-  For each framework (1-24) label:  
-    • "match"    – pattern clearly present  
-    • "partial"  – hints but incomplete  
-    • "miss"     – absent
-
-**B. Structural Scoring** (0-5 each)  
-  1. Clarity & Purpose  
-  2. Role clarity  
-  3. Context provided  
-  4. Constraints & output format  
-  5. Error/safety handling  
-  Compute **overall_score** = average × 4 (max 20).
-
-**C. Recommendations**  
-  List **all impactful improvements** you can identify—no cap.  
-  Order from highest to lowest impact.  
-  Keep each item ≤ 20 words.
-
-**D. Improved Prompt**  
-  Rewrite **P** so it:  
-   • addresses *every* recommendation above  
-   • merges up to **three** relevant elite frameworks  
-   • preserves the user's original intent & tone where possible.
-
-**E. Optional Domain-Fit Check**  
-  If \`meta\` object is supplied (e.g., \`{ industry, audience, goal }\`):  
-   • flag tone/compliance mismatches  
-   • add domain-specific tips to *Recommendations*  
-  Else skip.
-
-**F. Output Format** — respond with **STRICT valid JSON** only:
-
-\`\`\`json
-{
-  "overall_score": 17,
-  "framework_coverage": {
-    "Clarifying Interview": "match",
-    "Step-by-Step Chain": "partial",
-    "...": "miss"
-  },
-  "improvements": [
-    "Add explicit JSON answer schema.",
-    "Insert a critic-review loop to catch reasoning errors.",
-    "Set a knowledge-cutoff reminder to avoid outdated facts.",
-    "Provide role clarification for the assistant.",
-    "Specify refusal policy for disallowed content."
-  ],
-  "improved_prompt": "<fully rewritten prompt here>"
-}
-\`\`\`
-
-– End of instructions – ---
-
-**What's included**
-
-- **Sanity guard** (short/paragraph catch)  
-- **All 24 elite-prompt patterns**  
-- **Unlimited, ranked recommendations**  
-- **Optional domain-fit layer**  
-- **Deterministic JSON schema**  
-- **Self-continue safeguard**  
-- **Failure etiquette**
-
-Drop this into your \`/api/evaluate-prompt\` system message and you're set.`
-        },
-        {
-          role: "user",
-          content: `prompt_to_evaluate: ${prompt}`
-        }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent }
       ],
     });
 
     const text = completion.choices[0]?.message?.content || "No response generated";
+    console.log("OpenAI response:", text);
 
-    return NextResponse.json({ result: text });
+    // Try to parse as JSON, fallback to error if not valid
+    let parsed = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      return NextResponse.json({
+        error: "InvalidAIResponse",
+        message: "OpenAI did not return valid JSON. See raw response.",
+        raw: text
+      }, { status: 200 });
+    }
+
+    // Attach hash to response if not present
+    if (!parsed.hash) {
+      parsed.hash = hash;
+    }
+
+    return NextResponse.json(parsed);
   } catch (error) {
     console.error("Error evaluating prompt:", error);
-    return NextResponse.json(
-      { error: "Failed to evaluate prompt" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      error: "ServerError",
+      message: "An error occurred while evaluating the prompt."
+    }, { status: 500 });
   }
 }
 

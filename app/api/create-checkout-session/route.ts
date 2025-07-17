@@ -12,7 +12,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a checkout session
+    // NOTE: The prompt is only stored as truncated metadata for Stripe reference.
+    // The full prompt is sent to OpenAI for analysis after payment, via /api/evaluate-prompt.
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       success_url: `${req.headers.get('origin')}/results?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin')}/`,
       metadata: {
-        prompt: prompt,
+        prompt: prompt.substring(0, 500),
       },
     });
 

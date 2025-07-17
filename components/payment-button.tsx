@@ -9,9 +9,10 @@ interface PaymentButtonProps {
   prompt: string;
   onSuccess?: () => void;
   className?: string;
+  label?: string;
 }
 
-export function PaymentButton({ prompt, onSuccess, className }: PaymentButtonProps) {
+export function PaymentButton({ prompt, onSuccess, className, label }: PaymentButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handlePayment = async () => {
@@ -71,7 +72,7 @@ export function PaymentButton({ prompt, onSuccess, className }: PaymentButtonPro
       ) : (
         <>
           <CreditCard className="mr-2 h-4 w-4" />
-          Get my PromptIQ Now
+          {label || 'Get my PromptIQ Now'}
         </>
       )}
     </Button>

@@ -15,9 +15,10 @@ import { checkServerUsage } from "@/lib/usage-tracker"
 
 interface PromptInputProps {
   onBack: () => void
+  onSubmit: (prompt: string) => void
 }
 
-export function PromptInput({ onBack }: PromptInputProps) {
+export function PromptInput({ onBack, onSubmit }: PromptInputProps) {
   const [prompt, setPrompt] = useState("")
   const [canUseFree, setCanUseFree] = useState(true)
   const [usageCount, setUsageCount] = useState(0)
@@ -37,46 +38,15 @@ export function PromptInput({ onBack }: PromptInputProps) {
   const handleSubmit = () => {
     if (!prompt.trim()) return
     localStorage.setItem("userPrompt", prompt)
-    const toolPrompt = `You are a senior prompt strategist trained in evaluating and optimizing AI prompts across diverse use cases (chat, classification, generation, reasoning, etc.). Your job is to audit the structure, clarity, intent, and effectiveness of a given prompt and return a clean, structured analysis in strict JSON format.
-
-Please analyze the following prompt using the criteria below:
-
-1. Clarity: Is the prompt unambiguous and well-structured?
-2. Intent Alignment: Does the prompt clearly communicate its goal to the model?
-3. Framework Fit: Does it follow any recognized best-practice prompt patterns (e.g., role-based, step-by-step, zero/few-shot)?
-4. Risk Factors: Any signs of vague phrasing, overload, conflicting tasks, or hallucination risk?
-5. Output Constraints: Are there formatting, tone, or content structure requirements?
-
-Return only valid JSON in this format:
-
-{
-  "strengths": [
-    "Clearly specifies the assistant's role as a summarizer.",
-    "Includes structured formatting instructions for the output."
-  ],
-  "improvements": [
-    "Prompt is overly broad in intent — could be narrowed to a specific task.",
-    "Missing example output for clearer alignment."
-  ],
-  "optimizedPrompt": "You are a summarization assistant tasked with distilling long-form text into 3 bullet points. Use clear, concise language and maintain factual integrity. Output must be in Markdown format."
-}
-
-Only output valid JSON. Do not explain your reasoning outside the JSON block.
-
-Evaluate this prompt:`
-    localStorage.setItem("toolPrompt", toolPrompt)
-    router.push("/results") // we'll simulate post-payment result view
+    onSubmit(prompt)
   }
 
   return (
     <div>
-      {showFreeAlert && <FreeModeAlert />}
+      {/* {showFreeAlert && <FreeModeAlert />} */}
       
       <div className="space-y-6">
-        <SubscriptionCTA variant="prompt-input" onSubscribe={() => {
-          // Handle subscription logic here
-          console.log('Subscribe clicked')
-        }} />
+        {/* SubscriptionCTA removed as per new design */}
         
         <Card className="shadow-lg border-0 bg-white">
           <CardHeader className="text-center pb-6">
@@ -107,10 +77,13 @@ Evaluate this prompt:`
                 Back
               </Button>
 
-              <PaymentButton 
-                prompt={prompt}
+              <Button 
+                onClick={handleSubmit}
                 className="flex-1 text-black py-3 bg-[#ebfc72] hover:bg-[#e5f666]"
-              />
+                disabled={!prompt.trim()}
+              >
+                Analyze
+              </Button>
             </div>
           </CardContent>
         </Card>
